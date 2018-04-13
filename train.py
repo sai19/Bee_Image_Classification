@@ -53,6 +53,19 @@ for i in tqdm(range(2000)):
 			data = list(tr["t"])
 			for k in range(len(data)-1):
 				x[j].append(data[k+1]-data[k])
+newly_bought = np.zeros((4,40))
+for i in range(2000):
+	bought_before = []
+	for j in range(49):
+		tr = train[(train["i"]==i)&(train["j"]==j)]
+		if j>5:
+			new_items = [w for w in list(tr["j"]) if w not in bought_before]
+			for w in new_items:
+				newly_bought[j%4,w] += 1
+		bought_before = bought_before + list(tr["j"])
+for i in range(4):
+	newly_bought[i] /= np.sum(newly_bought[i])		
+
 
 product_proba = np.zeros((49,40))
 prob_till = np.zeros((4,40))
@@ -97,7 +110,7 @@ for i in tqdm(range(2000)):
 		else:
 			a_count[np.where(a_count)>0] += 1
 		non_bought = len(np.where(a_count<0)[0])	
-		p = np.array([new_pr_buy_prob[i]/non_bought if a_count[n]<0 else norm(a_count[n],avg_gap[n],std_gap[n]) for n in range(40)])	
+		p = np.array([new_pr_buy_prob[i]*(newly_bought[t%4,n]) if a_count[n]<0 else (1-new_pr_buy_prob[i])*norm(a_count[n],avg_gap[n],std_gap[n]) for n in range(40)])	
 		pr_buying_history[i,t,:] = p#np.multiply(p,product_proba[t])
 		pr_weekly_data[i,t,:] = a
 		pr_price_diff[i,t,:] = 1 - np.divide(pr_ch_price[t],pr_def_prices)
@@ -107,7 +120,7 @@ n_prev = 5
 for i in tqdm(range(2000)):
 	for j in range(48):
 		#if j>20:
-			if j<48-1 :
+			if j<40 :
 				data = np.concatenate((pr_weekly_data[i,j,:],pr_price_diff[i,j+1,:],pr_buying_history[i,j,:],product_proba[j]))
 				x_train.append(data)
 				y_train.append(pr_weekly_data[i,j+1,:])
@@ -120,14 +133,14 @@ x_train,y_train = np.array(x_train),np.array(y_train)
 x_test,y_test = np.array(x_test),np.array(y_test)
 
 input_1 = Input(shape=(x_train.shape[1],))
-out_1 = Dense(64,activation="relu")(input_1)
-out_1 = Dense(64,activation="relu")(out_1)
-out = Dense(64,activation="relu")(out_1)
+out_1 = Dense(32,activation="relu")(input_1)
+out_1 = Dense(32,activation="relu")(out_1)
+out = Dense(32,activation="relu")(out_1)
 out = Dense(40,activation="sigmoid")(out)
 model = Model(input_1,out)
 
-model.compile(loss="categorical_crossentropy", optimizer='adam',metrics=["accuracy"])
-for i in range(100):
+model.compile(loss="binary_crossentropy", optimizer='adam',metrics=["accuracy"])
+for i in range(50):
 	model.fit(x_train,y_train,epochs=1,batch_size=32,validation_data=(x_test,y_test))
 	predicted = model.predict(x_test)
 	print(roc_auc_score(y_test.reshape((-1,1)),predicted.reshape((-1,1))))
